@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Pitch } from '../components/Pitch';
 import { PlayerCard } from '../components/PlayerCard';
+import { FlipIn, Kicker, ModeHeader, TopBar } from '../components/ui';
 import { Player } from '../data/players';
 import { Lineup, ROUNDS, Score, SLOTS, generateOffers, openSlotsFor, scoreLineup } from '../game/engine';
 import { Strings } from '../i18n';
-import { C } from '../theme';
+import { C, F } from '../theme';
 
 interface Props {
   t: Strings;
@@ -52,68 +53,60 @@ export function Draft({ t, seed, title, onDone, onQuit }: Props) {
   }
 
   return (
-    <View style={styles.wrap}>
-      <View style={styles.header}>
-        <Pressable onPress={onQuit} accessibilityRole="button" hitSlop={10} style={styles.quit}>
-          <Text style={styles.quitText}>‹ {t.quit}</Text>
-        </Pressable>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.round}>
-          {t.round} {round + 1}/{ROUNDS}
-        </Text>
-      </View>
-
-      <View style={styles.scoreRow}>
-        <ScoreBox label={t.talent} value={score.talent} />
-        <ScoreBox label={t.chem} value={score.chem} />
-        <ScoreBox label={t.total} value={score.total} strong />
-      </View>
-
-      <Pitch
-        lineup={lineup}
-        links={score.links}
-        t={t}
-        targets={targets}
-        onSlotPress={(slot) => selected && place(selected, slot)}
+    <View style={{ flex: 1 }}>
+      <TopBar
+        backLabel={t.quit}
+        onBack={onQuit}
+        right={
+          <Text style={styles.round}>
+            {t.round} {round + 1}/{ROUNDS}
+          </Text>
+        }
       />
+      <ModeHeader icon="shirt" title={title} n="05" />
+      <View style={styles.body}>
+        <View style={styles.scores}>
+          <ScoreBox label={t.talent} value={score.talent} />
+          <ScoreBox label={t.chem} value={score.chem} ruled />
+          <ScoreBox label={t.total} value={score.total} strong />
+        </View>
 
-      <Text style={styles.prompt}>{selected ? t.pickSlot : t.pickCard}</Text>
-      <View style={styles.offers}>
-        {offers.map((p) => (
-          <PlayerCard
-            key={p.id}
-            player={p}
-            t={t}
-            selected={selected?.id === p.id}
-            dimmed={!!selected && selected.id !== p.id}
-            onPress={() => pick(p)}
-          />
-        ))}
+        <Pitch lineup={lineup} links={score.links} t={t} targets={targets} onSlotPress={(slot) => selected && place(selected, slot)} />
+
+        <Kicker>{selected ? t.pickSlot : t.pickCard}</Kicker>
+        <View style={styles.offers}>
+          {offers.map((p, i) => (
+            <FlipIn key={`${round}-${p.id}`} trigger={round} delay={i * 70} style={{ flex: 1 }}>
+              <PlayerCard
+                player={p}
+                t={t}
+                selected={selected?.id === p.id}
+                dimmed={!!selected && selected.id !== p.id}
+                onPress={() => pick(p)}
+              />
+            </FlipIn>
+          ))}
+        </View>
       </View>
     </View>
   );
 }
 
-function ScoreBox({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
+function ScoreBox({ label, value, strong, ruled }: { label: string; value: number; strong?: boolean; ruled?: boolean }) {
   return (
-    <View style={[styles.scoreBox, strong && { backgroundColor: C.lime }]}>
-      <Text style={[styles.scoreValue, strong && { color: C.limeDark }]}>{value}</Text>
-      <Text style={[styles.scoreLabel, strong && { color: C.limeDark }]}>{label}</Text>
+    <View style={[styles.scoreBox, ruled && { borderLeftWidth: 2, borderLeftColor: C.text }, strong && { backgroundColor: C.accent }]}>
+      <Text style={[styles.scoreValue, strong && { color: C.bg }]}>{value}</Text>
+      <Text style={[styles.scoreLabel, strong && { color: C.bg }]}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, padding: 12, gap: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  quit: { minWidth: 70, paddingVertical: 6 },
-  quitText: { color: C.dim, fontSize: 15, fontWeight: '700' },
-  title: { color: C.text, fontSize: 16, fontWeight: '900' },
-  round: { color: C.lime, fontSize: 14, fontWeight: '800', minWidth: 70, textAlign: 'right' },
-  scoreRow: { flexDirection: 'row', gap: 8 },
-  scoreBox: { flex: 1, backgroundColor: C.panel, borderRadius: 10, paddingVertical: 6, alignItems: 'center' },
-  scoreValue: { color: C.text, fontSize: 20, fontWeight: '900' },
-  scoreLabel: { color: C.dim, fontSize: 11, fontWeight: '700' },
-  prompt: { color: C.dim, fontSize: 12, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', textAlign: 'center' },
-  offers: { flexDirection: 'row', gap: 8, paddingTop: 6 },
+  round: { fontFamily: F.heavy, fontSize: 14, color: C.accent700 },
+  body: { flex: 1, paddingTop: 12, paddingHorizontal: 16, paddingBottom: 14, gap: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
+  scores: { flexDirection: 'row', borderWidth: 2, borderColor: C.text },
+  scoreBox: { flex: 1, paddingVertical: 6, paddingHorizontal: 10 },
+  scoreValue: { fontFamily: F.heavy, fontSize: 20, color: C.text },
+  scoreLabel: { fontFamily: F.body, fontSize: 11, color: C.n700 },
+  offers: { flexDirection: 'row', gap: 8 },
 });

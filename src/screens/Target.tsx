@@ -1,17 +1,16 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Option, SearchPicker } from '../components/SearchPicker';
-import { DB_PLAYERS, DbPlayer, NATIONS } from '../data/db';
+import { Btn, Confetti, FlipIn, Kicker, ModeHeader, PopIn, Stamp, TopBar } from '../components/ui';
+import { DB_PLAYERS, DbPlayer } from '../data/db';
 import { TARGET_PICKS, Target as TargetT, botTargetPicks, newTarget, statsOf, targetPool, total } from '../game/stats';
 import { Strings, fill } from '../i18n';
-import { C } from '../theme';
+import { C, F } from '../theme';
 
 interface Props {
   t: Strings;
   onQuit: () => void;
 }
-
-const BOT_COLOR = '#57C7F2';
 
 export function Target({ t, onQuit }: Props) {
   const [target, setTarget] = useState<TargetT>(newTarget);
@@ -33,7 +32,9 @@ export function Target({ t, onQuit }: Props) {
   const botTotal = total(bots, target.key);
   const myGap = Math.abs(target.value - myTotal);
   const botGap = Math.abs(target.value - botTotal);
-  const verdict = myGap === botGap ? t.draw : myGap < botGap ? t.youWin : t.botWins;
+  const youWin = myGap < botGap;
+  const draw = myGap === botGap;
+  const verdict = draw ? t.draw : youWin ? t.youWin : t.botWins;
   const statLabel = target.key === 'goals' ? t.statGoals : t.statApps;
 
   function restart() {
@@ -41,60 +42,77 @@ export function Target({ t, onQuit }: Props) {
     setMine([]);
   }
 
+  const results = [
+    { name: t.you, total: myTotal, gap: myGap, win: youWin || draw },
+    { name: t.bot, total: botTotal, gap: botGap, win: !youWin && !draw },
+  ];
+
   return (
-    <View style={styles.wrap}>
-      <View style={styles.header}>
-        <Pressable onPress={onQuit} accessibilityRole="button" hitSlop={10} style={styles.side}>
-          <Text style={styles.quit}>‹ {t.quit}</Text>
-        </Pressable>
-        <Text style={styles.title}>{t.targetTitle}</Text>
-        <View style={styles.side} />
-      </View>
+    <View style={{ flex: 1 }}>
+      <TopBar backLabel={t.quit} onBack={onQuit} />
+      <ModeHeader icon="target" title={t.targetTitle} n="03" />
+      <ScrollView contentContainerStyle={styles.body}>
+        <View style={styles.targetBox}>
+          <Kicker>
+            {t.targetLabel} · {statLabel}
+          </Kicker>
+          <Text style={styles.targetValue}>{target.value}</Text>
+        </View>
 
-      <View style={styles.targetBox}>
-        <Text style={styles.targetLabel}>{t.targetLabel}</Text>
-        <Text style={styles.targetValue}>{target.value}</Text>
-        <Text style={styles.targetStat}>{statLabel}</Text>
-      </View>
+        <View>
+          {Array.from({ length: TARGET_PICKS }, (_, i) => {
+            const p = mine[i] ?? null;
+            return (
+              <View key={i} style={styles.slot}>
+                <Text style={styles.slotN}>{i + 1}</Text>
+                {p ? (
+                  <PopIn trigger={p.id} style={{ flex: 1, transformOrigin: 'left center' }}>
+                    <Text style={styles.slotName} numberOfLines={1}>
+                      {p.name}
+                    </Text>
+                  </PopIn>
+                ) : (
+                  <Text style={[styles.slotName, { flex: 1, color: C.n400 }]}>—</Text>
+                )}
+                <Text style={[styles.slotVal, { color: done ? C.text : C.n600 }]}>
+                  {p ? (done ? statsOf(p)[target.key] : t.hidden) : ''}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
 
-      <ScrollView contentContainerStyle={styles.columns}>
-        <Column
-          name={t.you}
-          color={C.lime}
-          players={mine}
-          reveal={done}
-          statKey={target.key}
-          hiddenLabel=""
-          t={t}
-          totalText={done ? `${myTotal} · ${fill(t.offBy, { n: myGap })}` : '?'}
-        />
-        <Column
-          name={t.bot}
-          color={BOT_COLOR}
-          players={bots}
-          reveal={done}
-          statKey={target.key}
-          hiddenLabel={t.hidden}
-          t={t}
-          totalText={done ? `${botTotal} · ${fill(t.offBy, { n: botGap })}` : '?'}
+        {done && (
+          <>
+            <FlipIn style={styles.results}>
+              {results.map((r, i) => {
+                const bg = r.win ? (i === 0 ? C.accent : C.text) : C.bg;
+                const fg = r.win ? C.bg : C.text;
+                return (
+                  <View key={i} style={[styles.result, { backgroundColor: bg }, i === 1 && { borderLeftWidth: 2, borderLeftColor: C.text }]}>
+                    <Text style={[styles.resName, { color: fg }]}>{r.name}</Text>
+                    <Text style={[styles.resTotal, { color: fg }]}>{r.total}</Text>
+                    <Text style={[styles.resOff, { color: fg }]}>{fill(t.offBy, { n: r.gap })}</Text>
+                  </View>
+                );
+              })}
+            </FlipIn>
+            <Stamp text={verdict} color={youWin ? C.accent : C.text} />
+          </>
+        )}
+
+        <View style={{ flex: 1 }} />
+        <Btn
+          label={done ? t.newGame : fill(t.pickPlayer, { n: mine.length + 1 })}
+          onPress={done ? restart : () => setPicking(true)}
+          minHeight={52}
+          fontSize={15}
         />
       </ScrollView>
 
-      {done && <Text style={styles.verdict}>{verdict}</Text>}
-
-      <Pressable
-        onPress={done ? restart : () => setPicking(true)}
-        accessibilityRole="button"
-        style={styles.primary}
-      >
-        <Text style={styles.primaryText}>
-          {done ? t.newGame : fill(t.pickPlayer, { n: mine.length + 1 })}
-        </Text>
-      </Pressable>
-
       {picking && (
         <SearchPicker
-          title={`${t.targetLabel}: ${target.value} · ${statLabel}`}
+          title={fill(t.pickPlayer, { n: mine.length + 1 })}
           placeholder={t.searchPlayer}
           closeLabel={t.close}
           emptyLabel={t.noMatch}
@@ -106,72 +124,22 @@ export function Target({ t, onQuit }: Props) {
           onClose={() => setPicking(false)}
         />
       )}
-    </View>
-  );
-}
-
-interface ColumnProps {
-  name: string;
-  color: string;
-  players: DbPlayer[];
-  reveal: boolean;
-  statKey: 'goals' | 'apps';
-  /** shown instead of the name while hidden; empty string means names are always visible */
-  hiddenLabel: string;
-  totalText: string;
-  t: Strings;
-}
-
-function Column({ name, color, players, reveal, statKey, hiddenLabel, totalText, t }: ColumnProps) {
-  const rows = Array.from({ length: TARGET_PICKS }, (_, i) => players[i] ?? null);
-  return (
-    <View style={[styles.column, { borderColor: color }]}>
-      <Text style={[styles.colName, { color }]}>{name}</Text>
-      {rows.map((p, i) => {
-        const showName = p && (reveal || hiddenLabel === '');
-        return (
-          <View key={i} style={styles.slot}>
-            <Text style={styles.slotName} numberOfLines={1}>
-              {showName ? `${NATIONS[p.nat]?.flag ?? ''} ${p.name}` : p && hiddenLabel ? `● ${hiddenLabel}` : '—'}
-            </Text>
-            <Text style={styles.slotValue}>{p && reveal ? statsOf(p)[statKey] : p ? '?' : ''}</Text>
-          </View>
-        );
-      })}
-      <View style={styles.totalRow}>
-        <Text style={styles.totalLabel}>{t.sumLabel}</Text>
-        <Text style={[styles.totalValue, { color }]}>{totalText}</Text>
-      </View>
+      <Confetti active={done && youWin} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, padding: 12, gap: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  side: { minWidth: 70, paddingVertical: 6 },
-  quit: { color: C.dim, fontSize: 15, fontWeight: '700' },
-  title: { color: C.text, fontSize: 16, fontWeight: '900' },
-  targetBox: {
-    backgroundColor: C.panel, borderRadius: 14, borderWidth: 1, borderColor: C.line,
-    alignItems: 'center', paddingVertical: 12,
-  },
-  targetLabel: { color: C.dim, fontSize: 12, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
-  targetValue: { color: C.lime, fontSize: 44, fontWeight: '900' },
-  targetStat: { color: C.text, fontSize: 14, fontWeight: '700' },
-  columns: { gap: 10 },
-  column: { backgroundColor: C.panel, borderRadius: 14, borderWidth: 2, padding: 10, gap: 6 },
-  colName: { fontSize: 15, fontWeight: '900' },
-  slot: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: C.bg, borderRadius: 8, paddingHorizontal: 10, minHeight: 36, gap: 8,
-  },
-  slotName: { color: C.text, fontSize: 14, fontWeight: '700', flex: 1 },
-  slotValue: { color: C.text, fontSize: 14, fontWeight: '900' },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, paddingTop: 2 },
-  totalLabel: { color: C.dim, fontSize: 13, fontWeight: '800' },
-  totalValue: { fontSize: 15, fontWeight: '900' },
-  verdict: { color: C.lime, fontSize: 20, fontWeight: '900', textAlign: 'center' },
-  primary: { minHeight: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.lime },
-  primaryText: { color: C.limeDark, fontWeight: '900', fontSize: 16 },
+  body: { flexGrow: 1, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 16, gap: 12, maxWidth: 560, width: '100%', alignSelf: 'center' },
+  targetBox: { borderBottomWidth: 2, borderBottomColor: C.text, paddingBottom: 12 },
+  targetValue: { fontFamily: F.heavy, fontSize: 88, lineHeight: 86, letterSpacing: -3.52, color: C.accent },
+  slot: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 48, borderBottomWidth: 1, borderBottomColor: C.divider },
+  slotN: { width: 16, fontFamily: F.semi, fontSize: 12, color: C.n700 },
+  slotName: { fontFamily: F.heavy, fontSize: 16, color: C.text },
+  slotVal: { fontFamily: F.semi, fontSize: 14 },
+  results: { flexDirection: 'row', borderWidth: 2, borderColor: C.text },
+  result: { flex: 1, paddingVertical: 10, paddingHorizontal: 12 },
+  resName: { fontFamily: F.heavy, fontSize: 13 },
+  resTotal: { fontFamily: F.heavy, fontSize: 28, lineHeight: 31 },
+  resOff: { fontFamily: F.body, fontSize: 12 },
 });

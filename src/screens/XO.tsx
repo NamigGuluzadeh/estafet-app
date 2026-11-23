@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Crest, Flag } from '../components/Badges';
 import { Option, SearchPicker } from '../components/SearchPicker';
+import { Btn, Confetti, ModeHeader, PopIn, Stamp, TopBar } from '../components/ui';
 import { DB_CLUBS, DB_PLAYERS, DbPlayer, NATIONS } from '../data/db';
-import { Board, Cat, Owner, botMove, cellCats, matches, newBoard, outcome } from '../game/xo';
+import { Board, Cat, LINES, Owner, botMove, cellCats, matches, newBoard, outcome } from '../game/xo';
 import { Strings, fill } from '../i18n';
-import { C } from '../theme';
+import { C, F } from '../theme';
 
 interface Props {
   t: Strings;
@@ -12,7 +14,8 @@ interface Props {
   onQuit: () => void;
 }
 
-const P_COLOR = [C.lime, '#57C7F2'];
+/** Player 1 / you are red, player 2 / bot is ink. */
+const P_COLOR = [C.accent, C.text];
 const PLAYER_OPTIONS: Option[] = DB_PLAYERS.map((p) => ({ key: String(p.id), label: p.label }));
 
 interface Game {
@@ -33,6 +36,10 @@ const fresh = (): Game => ({
   note: '',
 });
 
+function winLine(owners: Owner[]): number[] {
+  return LINES.find(([a, b, c]) => owners[a] !== null && owners[a] === owners[b] && owners[a] === owners[c]) ?? [];
+}
+
 export function XO({ t, vsBot, onQuit }: Props) {
   const [g, setG] = useState<Game>(fresh);
   const [picking, setPicking] = useState<number | null>(null);
@@ -40,6 +47,7 @@ export function XO({ t, vsBot, onQuit }: Props) {
   const labels = vsBot ? [t.you, t.bot] : [t.p1, t.p2];
   const result = useMemo(() => outcome(g.board, g.owners, g.used), [g]);
   const botTurn = vsBot && g.turn === 1 && !result.done;
+  const line = result.done ? winLine(g.owners) : [];
 
   function claim(game: Game, cell: number, player: DbPlayer): Game {
     const owners = game.owners.slice();
@@ -79,87 +87,108 @@ export function XO({ t, vsBot, onQuit }: Props) {
   if (result.done) status = result.winner === null ? t.draw : fill(t.winsMsg, { name: labels[result.winner] });
   else if (botTurn) status = t.botThinking;
   else status = fill(t.turnOf, { name: labels[g.turn] });
+  const celebrate = result.done && result.winner !== null && (!vsBot || result.winner === 0);
 
-  const pickTitle =
-    picking === null ? '' : cellCats(g.board, picking).map((c) => catText(c, t)).join('  ×  ');
+  const pickTitle = picking === null ? '' : cellCats(g.board, picking).map((c) => catText(c, t)).join(' × ');
 
   return (
-    <View style={styles.wrap}>
-      <View style={styles.header}>
-        <Pressable onPress={onQuit} accessibilityRole="button" hitSlop={10} style={styles.side}>
-          <Text style={styles.quit}>‹ {t.quit}</Text>
-        </Pressable>
-        <Text style={styles.title}>{t.xoTitle}</Text>
-        <View style={styles.side} />
-      </View>
-
-      <View style={styles.scoreRow}>
-        {[0, 1].map((o) => (
-          <View
-            key={o}
-            style={[styles.scoreBox, !result.done && g.turn === o && { borderColor: P_COLOR[o] }]}
-          >
-            <Text style={[styles.scoreName, { color: P_COLOR[o] }]}>{labels[o]}</Text>
-            <Text style={styles.scoreValue}>{counts[o]}</Text>
-          </View>
-        ))}
-      </View>
-
-      <Text style={[styles.status, result.done && { color: C.lime, fontSize: 20 }]}>{status}</Text>
-      <Text style={styles.note}>{g.note || (result.done ? '' : t.tapCell)}</Text>
-
-      <View style={styles.grid}>
-        <View style={styles.gridRow}>
-          <View style={styles.corner} />
-          {g.board.cols.map((c, i) => (
-            <CatCell key={i} cat={c} t={t} />
+    <View style={{ flex: 1 }}>
+      <TopBar backLabel={t.quit} onBack={onQuit} right={<Text style={styles.modeLabel}>{vsBot ? t.vsBot : t.twoPlayers}</Text>} />
+      <ModeHeader icon="grid" title={t.xoTitle} n="01" />
+      <ScrollView contentContainerStyle={styles.body}>
+        <View style={styles.scores}>
+          {[0, 1].map((o) => (
+            <View
+              key={o}
+              style={[
+                styles.score,
+                { borderTopColor: !result.done && g.turn === o ? P_COLOR[o] : 'transparent' },
+                o === 1 && { borderLeftWidth: 2, borderLeftColor: C.divider },
+              ]}
+            >
+              <View style={[styles.swatch, { backgroundColor: P_COLOR[o] }]} />
+              <Text style={styles.scoreName}>{labels[o]}</Text>
+              <Text style={styles.scoreCount}>{counts[o]}</Text>
+            </View>
           ))}
         </View>
-        {g.board.rows.map((r, row) => (
-          <View key={row} style={styles.gridRow}>
-            <CatCell cat={r} t={t} />
-            {[0, 1, 2].map((col) => {
-              const cell = row * 3 + col;
-              const owner = g.owners[cell];
-              const player = g.names[cell];
-              const canTap = owner === null && !result.done && !botTurn;
-              return (
-                <Pressable
-                  key={col}
-                  disabled={!canTap}
-                  onPress={() => setPicking(cell)}
-                  accessibilityRole="button"
-                  accessibilityLabel={player ? player.name : `cell ${cell + 1}`}
-                  style={[styles.cell, owner !== null && { backgroundColor: P_COLOR[owner], borderColor: P_COLOR[owner] }]}
-                >
-                  {player ? (
-                    <Text style={styles.cellName} numberOfLines={2}>{player.name}</Text>
-                  ) : (
-                    <Text style={styles.plus}>+</Text>
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-        ))}
-      </View>
 
-      <View style={styles.actions}>
+        <View style={{ minHeight: 46 }}>
+          {result.done ? (
+            <Stamp text={status} />
+          ) : (
+            <>
+              <Text style={styles.status}>{status}</Text>
+              <Text style={styles.note}>{g.note || t.tapCell}</Text>
+            </>
+          )}
+        </View>
+
+        <View style={styles.grid}>
+          <View style={styles.gridRow}>
+            <View style={[styles.rowHead, { backgroundColor: C.bg, minHeight: 80 }]} />
+            {g.board.cols.map((c, i) => (
+              <ColHead key={i} cat={c} t={t} />
+            ))}
+          </View>
+          {g.board.rows.map((r, row) => (
+            <View key={row} style={styles.gridRow}>
+              <View style={styles.rowHead}>
+                {r.kind === 'club' && <Crest name={DB_CLUBS[r.id].name} />}
+                <Text style={styles.rowName} numberOfLines={3}>
+                  {catText(r, t)}
+                </Text>
+              </View>
+              {[0, 1, 2].map((col) => {
+                const cell = row * 3 + col;
+                const owner = g.owners[cell];
+                const player = g.names[cell];
+                const canTap = owner === null && !result.done && !botTurn;
+                const win = line.includes(cell);
+                return (
+                  <Pressable
+                    key={col}
+                    disabled={!canTap}
+                    onPress={() => setPicking(cell)}
+                    accessibilityRole="button"
+                    accessibilityLabel={player ? player.name : `${catText(r, t)} × ${catText(g.board.cols[col], t)}`}
+                    style={({ pressed }) => [styles.cellWrap, pressed && { borderWidth: 2, borderColor: C.accent }]}
+                  >
+                    {owner === null ? (
+                      <View style={[styles.cell, { backgroundColor: C.bg }]}>
+                        <Text style={[styles.cellText, { color: C.n500 }]}>+</Text>
+                      </View>
+                    ) : (
+                      <PopIn
+                        trigger={player?.id}
+                        style={[styles.cell, { backgroundColor: P_COLOR[owner] }, win && { borderWidth: 4, borderColor: owner === 0 ? C.text : C.accent }]}
+                      >
+                        <Text style={[styles.cellText, { color: C.bg }]} numberOfLines={3}>
+                          {player?.name}
+                        </Text>
+                      </PopIn>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
+        </View>
+
+        <View style={{ flex: 1 }} />
         {result.done ? (
-          <Pressable onPress={() => setG(fresh())} accessibilityRole="button" style={[styles.btn, styles.primary]}>
-            <Text style={[styles.btnText, { color: C.limeDark }]}>{t.newGame}</Text>
-          </Pressable>
+          <Btn label={t.newGame} onPress={() => setG(fresh())} minHeight={52} fontSize={15} />
         ) : (
-          <Pressable
+          <Btn
+            label={t.pass}
+            variant="secondary"
             disabled={botTurn}
             onPress={() => setG({ ...g, turn: g.turn === 0 ? 1 : 0, note: '' })}
-            accessibilityRole="button"
-            style={[styles.btn, botTurn && { opacity: 0.4 }]}
-          >
-            <Text style={styles.btnText}>{t.pass}</Text>
-          </Pressable>
+            minHeight={52}
+            fontSize={15}
+          />
         )}
-      </View>
+      </ScrollView>
 
       {picking !== null && (
         <SearchPicker
@@ -172,66 +201,47 @@ export function XO({ t, vsBot, onQuit }: Props) {
           onClose={() => setPicking(null)}
         />
       )}
+      <Confetti active={celebrate} />
     </View>
   );
 }
 
 function catText(c: Cat, t: Strings): string {
   if (c.kind === 'club') return DB_CLUBS[c.id].name;
-  if (c.kind === 'nat') return `${NATIONS[c.id]?.flag ?? ''} ${c.id}`;
+  if (c.kind === 'nat') return NATIONS[c.id]?.name ?? c.id;
   return t.posFull[c.id];
 }
 
-function CatCell({ cat, t }: { cat: Cat; t: Strings }) {
+function ColHead({ cat, t }: { cat: Cat; t: Strings }) {
   return (
-    <View style={styles.cat}>
-      {cat.kind === 'nat' && <Text style={styles.catFlag}>{NATIONS[cat.id]?.flag ?? ''}</Text>}
-      {cat.kind === 'pos' && <Text style={styles.catBig}>{t.pos[cat.id]}</Text>}
-      <Text style={cat.kind === 'pos' ? styles.catSmall : styles.catText} numberOfLines={2}>
-        {cat.kind === 'club' ? DB_CLUBS[cat.id].name : cat.kind === 'nat' ? cat.id : t.posFull[cat.id]}
+    <View style={styles.colHead}>
+      {cat.kind === 'nat' && <Flag code={cat.id} />}
+      <Text style={styles.colCode}>{cat.kind === 'pos' ? t.pos[cat.id] : cat.kind === 'nat' ? cat.id : ''}</Text>
+      <Text style={styles.colName} numberOfLines={2}>
+        {catText(cat, t)}
       </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, padding: 12, gap: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  side: { minWidth: 70, paddingVertical: 6 },
-  quit: { color: C.dim, fontSize: 15, fontWeight: '700' },
-  title: { color: C.text, fontSize: 16, fontWeight: '900' },
-  scoreRow: { flexDirection: 'row', gap: 8 },
-  scoreBox: {
-    flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: C.panel, borderRadius: 12, borderWidth: 2, borderColor: C.panel,
-    paddingHorizontal: 14, paddingVertical: 10,
-  },
-  scoreName: { fontSize: 15, fontWeight: '900' },
-  scoreValue: { color: C.text, fontSize: 22, fontWeight: '900' },
-  status: { color: C.text, fontSize: 16, fontWeight: '900', textAlign: 'center' },
-  note: { color: C.dim, fontSize: 13, textAlign: 'center', minHeight: 18 },
-  grid: { gap: 6 },
-  gridRow: { flexDirection: 'row', gap: 6 },
-  corner: { flex: 1 },
-  cat: {
-    flex: 1, aspectRatio: 1, backgroundColor: C.panelHi, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center', padding: 4,
-  },
-  catFlag: { fontSize: 24 },
-  catText: { color: C.text, fontSize: 11, fontWeight: '800', textAlign: 'center' },
-  catBig: { color: C.text, fontSize: 20, fontWeight: '900' },
-  catSmall: { color: C.dim, fontSize: 9, fontWeight: '700', textAlign: 'center' },
-  cell: {
-    flex: 1, aspectRatio: 1, backgroundColor: C.panel, borderRadius: 12, borderWidth: 2, borderColor: C.line,
-    alignItems: 'center', justifyContent: 'center', padding: 4,
-  },
-  cellName: { color: '#10161F', fontSize: 12, fontWeight: '900', textAlign: 'center' },
-  plus: { color: C.dim, fontSize: 26, fontWeight: '300' },
-  actions: { flexDirection: 'row', marginTop: 4 },
-  btn: {
-    flex: 1, minHeight: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: C.panel, borderWidth: 1, borderColor: C.line,
-  },
-  primary: { backgroundColor: C.lime, borderColor: C.lime },
-  btnText: { color: C.text, fontWeight: '900', fontSize: 15 },
+  modeLabel: { fontFamily: F.body, fontSize: 12, color: C.n700 },
+  body: { flexGrow: 1, paddingTop: 12, paddingHorizontal: 16, paddingBottom: 16, gap: 12, maxWidth: 560, width: '100%', alignSelf: 'center' },
+  scores: { flexDirection: 'row', borderWidth: 2, borderColor: C.divider },
+  score: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: 4 },
+  swatch: { width: 12, height: 12 },
+  scoreName: { flex: 1, fontFamily: F.heavy, fontSize: 15, color: C.text },
+  scoreCount: { fontFamily: F.heavy, fontSize: 24, color: C.text },
+  status: { fontFamily: F.heavy, fontSize: 20, color: C.text },
+  note: { fontFamily: F.body, fontSize: 13, minHeight: 20, color: C.n700 },
+  grid: { backgroundColor: C.text, borderWidth: 2, borderColor: C.text, gap: 2 },
+  gridRow: { flexDirection: 'row', gap: 2 },
+  rowHead: { width: 86, backgroundColor: C.surface, padding: 8, justifyContent: 'space-between', gap: 6 },
+  rowName: { fontFamily: F.heavy, fontSize: 13, lineHeight: 15, color: C.text },
+  colHead: { flex: 1, minWidth: 0, backgroundColor: C.surface, padding: 8, minHeight: 80, justifyContent: 'flex-end', gap: 2 },
+  colCode: { fontFamily: F.heavy, fontSize: 20, lineHeight: 22, color: C.text },
+  colName: { fontFamily: F.body, fontSize: 11, color: C.n700 },
+  cellWrap: { flex: 1, minWidth: 0, height: 92, backgroundColor: C.bg },
+  cell: { flex: 1, padding: 8, justifyContent: 'flex-end' },
+  cellText: { fontFamily: F.heavy, fontSize: 13, lineHeight: 15 },
 });

@@ -1,10 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { DbPlayer, NATIONS } from '../data/db';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Btn, Confetti, FlipIn, ModeHeader, NATIVE_DRIVER, Stamp, TopBar } from '../components/ui';
+import { DbPlayer } from '../data/db';
 import { Duel, StatKey, newDuel, statValue, statsOf } from '../game/stats';
 import { Strings, fill } from '../i18n';
-import { C } from '../theme';
+import { C, F } from '../theme';
 
 interface Props {
   t: Strings;
@@ -15,15 +16,23 @@ const BEST_KEY = 'estafet-arena:hl-best';
 
 export function HigherLower({ t, onQuit }: Props) {
   const [duel, setDuel] = useState<Duel>(() => newDuel());
+  const [round, setRound] = useState(0);
   const [chosen, setChosen] = useState<DbPlayer | null>(null);
   const [streak, setStreak] = useState(0);
   const [best, setBest] = useState(0);
+  const bump = useState(() => new Animated.Value(0))[0];
 
   useEffect(() => {
     AsyncStorage.getItem(BEST_KEY)
       .then((v) => v && setBest(Number(v) || 0))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (streak === 0) return;
+    bump.setValue(0);
+    Animated.timing(bump, { toValue: 1, duration: 450, useNativeDriver: NATIVE_DRIVER }).start();
+  }, [streak]);
 
   const va = statValue(duel.a, duel.key)!;
   const vb = statValue(duel.b, duel.key)!;
@@ -49,104 +58,102 @@ export function HigherLower({ t, onQuit }: Props) {
   function next() {
     if (!right) setStreak(0);
     setChosen(null);
+    setRound(round + 1);
     setDuel(newDuel(new Set([duel.a.id, duel.b.id])));
   }
 
   return (
-    <View style={styles.wrap}>
-      <View style={styles.header}>
-        <Pressable onPress={onQuit} accessibilityRole="button" hitSlop={10} style={styles.side}>
-          <Text style={styles.quit}>‹ {t.quit}</Text>
-        </Pressable>
-        <Text style={styles.title}>{t.hlTitle}</Text>
-        <View style={styles.side} />
-      </View>
-
-      <View style={styles.scoreRow}>
-        <View style={styles.scoreBox}>
-          <Text style={styles.scoreValue}>{streak}</Text>
-          <Text style={styles.scoreLabel}>{t.streakNow}</Text>
+    <View style={{ flex: 1 }}>
+      <TopBar backLabel={t.quit} onBack={onQuit} right={<Text style={styles.best}>{t.bestStreak} {best}</Text>} />
+      <ModeHeader icon="updown" title={t.hlTitle} n="04" />
+      <ScrollView contentContainerStyle={styles.body}>
+        <View style={styles.streakRow}>
+          <Animated.Text
+            style={[
+              styles.streak,
+              {
+                transformOrigin: 'left bottom',
+                transform: [
+                  { translateY: bump.interpolate({ inputRange: [0, 0.35, 1], outputRange: [0, -10, 0] }) },
+                  { scale: bump.interpolate({ inputRange: [0, 0.35, 1], outputRange: [1, 1.2, 1] }) },
+                ],
+              },
+            ]}
+          >
+            {streak}
+          </Animated.Text>
+          <Text style={styles.streakLabel}>{t.streakNow}</Text>
         </View>
-        <View style={styles.scoreBox}>
-          <Text style={styles.scoreValue}>{best}</Text>
-          <Text style={styles.scoreLabel}>{t.bestStreak}</Text>
+
+        <Text style={styles.question}>{question}</Text>
+
+        <View style={{ gap: 8 }}>
+          {[duel.a, duel.b].map((p, i) => {
+            const isWinner = p.id === winner.id;
+            const picked = chosen?.id === p.id;
+            const bg = answered && isWinner ? C.accent : answered && picked ? C.text : C.surface;
+            const fg = answered && (isWinner || picked) ? C.bg : C.text;
+            const born = statsOf(p).born;
+            return (
+              <FlipIn key={`${round}-${p.id}`} trigger={round} delay={i * 80}>
+                <Pressable
+                  onPress={() => choose(p)}
+                  disabled={answered}
+                  accessibilityRole="button"
+                  accessibilityLabel={p.name}
+                  style={({ pressed }) => [styles.card, { backgroundColor: bg, borderColor: pressed ? C.accent : answered && (isWinner || picked) ? bg : 'transparent' }]}
+                >
+                  <Text style={[styles.meta, { color: fg }]}>
+                    {p.nat}
+                    {born ? ` · ${fill(t.born, { n: born })}` : ''}
+                  </Text>
+                  <Text style={[styles.name, { color: fg }]}>{p.name}</Text>
+                  <View style={{ flex: 1 }} />
+                  {answered && (
+                    <FlipIn>
+                      <Text style={[styles.value, { color: fg }]}>{valueText(p, duel.key)}</Text>
+                      <Text style={[styles.valueLabel, { color: fg }]}>{valueLabel(duel.key, t)}</Text>
+                    </FlipIn>
+                  )}
+                </Pressable>
+              </FlipIn>
+            );
+          })}
         </View>
-      </View>
 
-      <Text style={styles.question}>{question}</Text>
-
-      <View style={styles.cards}>
-        {[duel.a, duel.b].map((p) => {
-          const isWinner = p.id === winner.id;
-          const picked = chosen?.id === p.id;
-          return (
-            <Pressable
-              key={p.id}
-              onPress={() => choose(p)}
-              disabled={answered}
-              accessibilityRole="button"
-              accessibilityLabel={p.name}
-              style={[
-                styles.card,
-                answered && isWinner && styles.cardRight,
-                answered && picked && !isWinner && styles.cardWrong,
-              ]}
-            >
-              <Text style={styles.flag}>{NATIONS[p.nat]?.flag ?? ''}</Text>
-              <Text style={styles.name}>{p.name}</Text>
-              <Text style={styles.meta}>
-                {p.nat}
-                {p.pos ? ` · ${t.pos[p.pos]}` : ''}
-              </Text>
-              <Text style={[styles.value, answered && isWinner && { color: C.lime }]}>
-                {answered ? valueText(p, duel.key, t) : '?'}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <Text style={[styles.verdict, answered && !right && { color: C.mid }]}>
-        {answered ? (right ? t.correct : t.gameOver) : ' '}
-      </Text>
-
-      {answered && (
-        <Pressable onPress={next} accessibilityRole="button" style={styles.primary}>
-          <Text style={styles.primaryText}>{right ? t.nextQ : t.newGame}</Text>
-        </Pressable>
-      )}
+        <View style={{ flex: 1 }} />
+        {answered && (
+          <>
+            <Stamp text={right ? t.correct : t.gameOver} color={right ? C.accent : C.text} />
+            <Btn label={right ? t.nextQ : t.newGame} onPress={next} minHeight={52} fontSize={15} />
+          </>
+        )}
+      </ScrollView>
+      <Confetti active={right && streak > 0 && streak % 5 === 0} />
     </View>
   );
 }
 
-function valueText(p: DbPlayer, key: StatKey, t: Strings): string {
-  if (key === 'age') return fill(t.born, { n: statsOf(p).born ?? '' });
+function valueText(p: DbPlayer, key: StatKey): string {
+  if (key === 'age') return String(statsOf(p).born ?? '');
   return String(statValue(p, key));
 }
 
+function valueLabel(key: StatKey, t: Strings): string {
+  if (key === 'age') return fill(t.born, { n: '' }).trim();
+  return { goals: t.statGoals, apps: t.statApps, caps: t.statCaps }[key];
+}
+
 const styles = StyleSheet.create({
-  wrap: { flex: 1, padding: 12, gap: 12, maxWidth: 560, width: '100%', alignSelf: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  side: { minWidth: 70, paddingVertical: 6 },
-  quit: { color: C.dim, fontSize: 15, fontWeight: '700' },
-  title: { color: C.text, fontSize: 16, fontWeight: '900' },
-  scoreRow: { flexDirection: 'row', gap: 8 },
-  scoreBox: { flex: 1, backgroundColor: C.panel, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
-  scoreValue: { color: C.text, fontSize: 22, fontWeight: '900' },
-  scoreLabel: { color: C.dim, fontSize: 11, fontWeight: '700' },
-  question: { color: C.text, fontSize: 19, fontWeight: '900', textAlign: 'center', paddingHorizontal: 8 },
-  cards: { flexDirection: 'row', gap: 10 },
-  card: {
-    flex: 1, backgroundColor: C.panel, borderRadius: 14, borderWidth: 2, borderColor: C.line,
-    alignItems: 'center', paddingVertical: 18, paddingHorizontal: 8, gap: 4, minHeight: 190,
-  },
-  cardRight: { borderColor: C.lime, backgroundColor: C.panelHi },
-  cardWrong: { borderColor: C.mid },
-  flag: { fontSize: 34 },
-  name: { color: C.text, fontSize: 17, fontWeight: '900', textAlign: 'center' },
-  meta: { color: C.dim, fontSize: 12, fontWeight: '700' },
-  value: { color: C.text, fontSize: 26, fontWeight: '900', marginTop: 8, textAlign: 'center' },
-  verdict: { color: C.lime, fontSize: 20, fontWeight: '900', textAlign: 'center', minHeight: 28 },
-  primary: { minHeight: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.lime },
-  primaryText: { color: C.limeDark, fontWeight: '900', fontSize: 16 },
+  best: { fontFamily: F.body, fontSize: 12, color: C.n700 },
+  body: { flexGrow: 1, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 16, gap: 12, maxWidth: 560, width: '100%', alignSelf: 'center' },
+  streakRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10, borderBottomWidth: 2, borderBottomColor: C.text, paddingBottom: 10 },
+  streak: { fontFamily: F.heavy, fontSize: 64, lineHeight: 62, color: C.accent },
+  streakLabel: { fontFamily: F.semi, fontSize: 13, color: C.n700 },
+  question: { fontFamily: F.heavy, fontSize: 24, lineHeight: 28, letterSpacing: -0.24, color: C.text },
+  card: { minHeight: 150, padding: 14, borderWidth: 2 },
+  meta: { fontFamily: F.semi, fontSize: 12 },
+  name: { fontFamily: F.heavy, fontSize: 28, lineHeight: 30, letterSpacing: -0.56, marginTop: 4 },
+  value: { fontFamily: F.heavy, fontSize: 32, lineHeight: 34 },
+  valueLabel: { fontFamily: F.body, fontSize: 12 },
 });
