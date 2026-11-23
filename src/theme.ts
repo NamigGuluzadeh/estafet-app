@@ -1,29 +1,33 @@
+// Modernist design system: ink on a light ground, one red accent, square corners, 2px rules.
+// Token values mirror the Claude Design handoff (_ds/modernist styles.css).
+
 export const C = {
-  bg: '#0B1626',
-  panel: '#13233A',
-  panelHi: '#1B3050',
-  line: '#27405F',
-  text: '#F2F5F9',
-  dim: '#8FA3BC',
-  lime: '#C8D645',
-  limeDark: '#1C2408',
-  pitch: '#14573A',
-  pitchLine: 'rgba(255,255,255,0.16)',
-  good: '#C8D645',
-  mid: '#F2A93B',
-  bad: 'rgba(255,255,255,0.22)',
+  bg: '#f3f2f2',
+  surface: '#eae9e9',
+  text: '#201e1d',
+  accent: '#ec3013',
+  /** #201e1d at 40% */
+  divider: 'rgba(32,30,29,0.4)',
+  n100: '#f8f4f4',
+  n200: '#eae7e7',
+  n300: '#d7d3d3',
+  n400: '#bab6b6',
+  n500: '#9b9797',
+  n600: '#7d7979',
+  n700: '#605d5d',
+  accent100: '#fff2ef',
+  accent600: '#dd2b0f',
+  accent700: '#ae1800',
+  accent800: '#7c1405',
+  scrim: 'rgba(45,43,43,0.5)',
 };
 
-export const TIER_COLOR: Record<number, string> = {
-  1: '#B98356',
-  2: '#B4BDCA',
-  3: '#E8BC47',
-  4: '#57C7F2',
-  5: '#C8D645',
+/** Archivo faces, loaded in App.tsx. Custom fonts pick the face by family, not by fontWeight. */
+export const F = {
+  body: 'Archivo_400Regular',
+  semi: 'Archivo_600SemiBold',
+  heavy: 'Archivo_800ExtraBold',
 };
 
-export function linkColor(v: number): string {
-  if (v >= 3) return C.good;
-  if (v >= 1) return C.mid;
-  return C.bad;
-}
+export const SHADOW_MD = '0px 3px 10px rgba(45,43,43,0.16)';
+export const SHADOW_LG = '0px 12px 32px rgba(45,43,43,0.22)';

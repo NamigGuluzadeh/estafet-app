@@ -1,6 +1,15 @@
 export type Lang = 'az' | 'en';
 
 const az = {
+  heroKicker: 'Estafet YouTube kanalının oyunları',
+  latestVideo: 'Son video',
+  watch: 'İzlə',
+  settings: 'Tənzimləmələr',
+  language: 'Dil',
+  data: 'Məlumat',
+  dataNote: 'Futbolçu məlumatları Wikidata-dan götürülüb (CC0). Aktiv futbolçuların statistikası gecikə bilər. “Liqa” göstəriciləri kubok və Avropa oyunlarını daxil etmir.',
+  misses: 'Səhv',
+  statCaps: 'milli oyunlar',
   tagline: 'Futbol oyunları',
   dailyTitle: 'Draft · bugünkü oyunlar',
   draft: 'Draft',
@@ -94,6 +103,15 @@ const az = {
 };
 
 const en: typeof az = {
+  heroKicker: 'Games from the Estafet YouTube channel',
+  latestVideo: 'Latest video',
+  watch: 'Watch',
+  settings: 'Settings',
+  language: 'Language',
+  data: 'Data',
+  dataNote: 'Player data comes from Wikidata (CC0). Stats can lag behind for active players. “League” figures exclude cups and European matches.',
+  misses: 'Misses',
+  statCaps: 'international caps',
   tagline: 'Football games',
   dailyTitle: "Draft · today's games",
   draft: 'Draft',
@@ -185,6 +203,8 @@ const en: typeof az = {
   nextQ: 'Next',
   born: 'born {n}',
 };
+
+export const LANG_NAMES: Record<Lang, string> = { az: 'Azərbaycan dili', en: 'English' };
 
 export type Strings = typeof az;
 export const STRINGS: Record<Lang, Strings> = { az, en };

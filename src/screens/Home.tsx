@@ -1,14 +1,19 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ReactNode } from 'react';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Icon, IconName } from '../components/Icon';
+import { Btn, Kicker, LangDropdown, MediaBox } from '../components/ui';
+import { HERO_IMAGE, LATEST_VIDEO } from '../config';
 import { DAILY_DRAFTS, rankFor } from '../game/engine';
 import { Lang, Strings } from '../i18n';
 import { Save } from '../storage';
-import { C } from '../theme';
+import { C, F } from '../theme';
 
 interface Props {
   t: Strings;
   save: Save;
   day: string;
   onLang: (l: Lang) => void;
+  onSettings: () => void;
   onDaily: (draftNo: number) => void;
   onPractice: () => void;
   onXO: (vsBot: boolean) => void;
@@ -17,129 +22,161 @@ interface Props {
   onHL: () => void;
 }
 
-export function Home({ t, save, day, onLang, onDaily, onPractice, onXO, onList, onTarget, onHL }: Props) {
+// Home direction 1a from the design handoff: ruled list.
+export function Home({ t, save, day, onLang, onSettings, onDaily, onPractice, onXO, onList, onTarget, onHL }: Props) {
   const today = save.days[day] ?? {};
   const todayScores = Object.values(today);
   const todayBest = todayScores.length ? Math.max(...todayScores) : null;
-  const streak = save.streak;
+  const lang = save.lang;
+
+  const modes: { n: string; icon: IconName; title: string; sub: string; go: () => void }[] = [
+    { n: '02', icon: 'list', title: t.listTitle, sub: t.listSub, go: onList },
+    { n: '03', icon: 'target', title: t.targetTitle, sub: t.targetSub, go: onTarget },
+    { n: '04', icon: 'updown', title: t.hlTitle, sub: t.hlSub, go: onHL },
+  ];
 
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
       <View style={styles.top}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.logo}>
-            ESTAFET <Text style={{ color: C.lime }}>ARENA</Text>
+            ESTAFET <Text style={{ color: C.accent }}>ARENA</Text>
           </Text>
           <Text style={styles.tagline}>{t.tagline}</Text>
         </View>
-        <View style={styles.langRow}>
-          {(['az', 'en'] as Lang[]).map((l) => (
-            <Pressable
-              key={l}
-              onPress={() => onLang(l)}
-              accessibilityRole="button"
-              style={[styles.lang, save.lang === l && styles.langOn]}
-            >
-              <Text style={[styles.langText, save.lang === l && { color: C.limeDark }]}>{l.toUpperCase()}</Text>
-            </Pressable>
-          ))}
+        <View style={styles.topRight}>
+          <LangDropdown lang={lang} onChange={onLang} />
+          <Pressable onPress={onSettings} accessibilityRole="button" accessibilityLabel={t.settings} style={styles.gear}>
+            {({ pressed }) => <Icon name="settings" size={20} color={pressed ? C.accent : C.text} />}
+          </Pressable>
         </View>
       </View>
+
+      <MediaBox source={HERO_IMAGE} height={184} style={styles.hero}>
+        <View style={styles.heroKicker} pointerEvents="none">
+          <Text style={styles.heroKickerText}>{t.heroKicker}</Text>
+        </View>
+      </MediaBox>
 
       <View style={styles.stats}>
-        <Stat label={t.streak} value={`${streak}`} unit={t.days} />
-        <Stat label={t.todayBest} value={todayBest === null ? '–' : `${todayBest}`} />
-        <Stat label={t.best} value={save.best ? `${save.best}` : '–'} />
+        <Stat label={t.streak} value={`${save.streak}`} unit={` ${t.days}`} />
+        <Stat label={t.todayBest} value={todayBest === null ? '–' : `${todayBest}`} ruled />
+        <Stat label={t.best} value={save.best ? `${save.best}` : '–'} ruled />
       </View>
 
-      <Text style={styles.section}>{t.modes}</Text>
-      <View style={styles.mode}>
-        <Text style={styles.rowTitle}>{t.xoTitle}</Text>
-        <Text style={styles.rowSub}>{t.xoSub}</Text>
-        <View style={styles.modeBtns}>
-          <Pressable onPress={() => onXO(true)} accessibilityRole="button" style={[styles.playBtn, styles.modeBtn]}>
-            <Text style={styles.playText}>{t.vsBot}</Text>
-          </Pressable>
-          <Pressable onPress={() => onXO(false)} accessibilityRole="button" style={[styles.ghostBtn, styles.modeBtn]}>
-            <Text style={styles.ghostText}>{t.twoPlayers}</Text>
-          </Pressable>
+      <Kicker style={styles.section}>{t.modes}</Kicker>
+      <View style={styles.xoRow}>
+        <View style={styles.modeLine}>
+          <Text style={styles.num}>01</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle}>{t.xoTitle}</Text>
+            <Text style={styles.rowSub}>{t.xoSub}</Text>
+          </View>
+          <IconBox icon="grid" />
+        </View>
+        <View style={styles.xoBtns}>
+          <Btn label={t.vsBot} onPress={() => onXO(true)} style={{ flex: 1 }} />
+          <Btn label={t.twoPlayers} variant="secondary" onPress={() => onXO(false)} style={{ flex: 1 }} />
         </View>
       </View>
-      <Pressable onPress={onList} accessibilityRole="button" style={styles.row}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.rowTitle}>{t.listTitle}</Text>
-          <Text style={styles.rowSub}>{t.listSub}</Text>
-        </View>
-        <View style={styles.playBtn}>
-          <Text style={styles.playText}>{t.play}</Text>
-        </View>
-      </Pressable>
-      {[
-        { title: t.targetTitle, sub: t.targetSub, go: onTarget },
-        { title: t.hlTitle, sub: t.hlSub, go: onHL },
-      ].map((m) => (
-        <Pressable key={m.title} onPress={m.go} accessibilityRole="button" style={styles.row}>
-          <View style={{ flex: 1, paddingRight: 10 }}>
+      {modes.map((m) => (
+        <Row key={m.n} onPress={m.go} label={m.title}>
+          <Text style={[styles.num, { alignSelf: 'flex-start' }]}>{m.n}</Text>
+          <View style={{ flex: 1 }}>
             <Text style={styles.rowTitle}>{m.title}</Text>
             <Text style={styles.rowSub}>{m.sub}</Text>
           </View>
-          <View style={styles.playBtn}>
-            <Text style={styles.playText}>{t.play}</Text>
-          </View>
-        </Pressable>
+          <IconBox icon={m.icon} />
+        </Row>
       ))}
 
-      <Text style={styles.section}>{t.dailyTitle}</Text>
+      <Kicker style={styles.section}>{t.dailyTitle}</Kicker>
       {Array.from({ length: DAILY_DRAFTS }, (_, i) => i + 1).map((n) => {
         const score = today[n];
         const done = score !== undefined;
         return (
-          <Pressable
-            key={n}
-            disabled={done}
-            onPress={() => onDaily(n)}
-            accessibilityRole="button"
-            style={[styles.row, done && styles.rowDone]}
-          >
-            <View>
-              <Text style={styles.rowTitle}>{t.draft} #{n}</Text>
-              <Text style={styles.rowSub}>{done ? `${t.played} · ${t.ranks[rankFor(score)]}` : `11 × 3`}</Text>
+          <Row key={n} onPress={() => onDaily(n)} disabled={done} label={`${t.draft} #${n}`}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.dailyTitle}>
+                {t.draft} #{n}
+              </Text>
+              <Text style={styles.rowSub}>{done ? `${t.played} · ${t.ranks[rankFor(score)]}` : '11 × 3'}</Text>
             </View>
             {done ? (
-              <Text style={styles.rowScore}>{score}</Text>
+              <Text style={styles.score}>{score}</Text>
             ) : (
-              <View style={styles.playBtn}>
-                <Text style={styles.playText}>{t.play}</Text>
+              <View style={styles.playTag}>
+                <Text style={styles.playTagText}>{t.play}</Text>
               </View>
             )}
-          </Pressable>
+          </Row>
         );
       })}
-
-      <Pressable onPress={onPractice} accessibilityRole="button" style={[styles.row, styles.practice]}>
-        <View>
-          <Text style={styles.rowTitle}>{t.practice}</Text>
+      <Row onPress={onPractice} label={t.practice} last>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.dailyTitle}>{t.practice}</Text>
           <Text style={styles.rowSub}>{t.practiceSub}</Text>
         </View>
-        <Text style={styles.arrow}>›</Text>
-      </Pressable>
+        <IconBox icon="repeat" />
+      </Row>
 
-      <Text style={styles.section}>{t.howTitle}</Text>
-      <View style={styles.how}>
-        {[t.how1, t.how2, t.how3, t.how4, t.how5].map((line, i) => (
-          <Text key={i} style={styles.howLine}>{line}</Text>
-        ))}
+      <View style={styles.video}>
+        <View style={styles.videoKicker}>
+          <Icon name="youtube" size={18} color={C.accent} />
+          <Kicker>{t.latestVideo}</Kicker>
+        </View>
+        <MediaBox source={LATEST_VIDEO.thumbnail} height={196}>
+          <View style={styles.duration} pointerEvents="none">
+            <Text style={styles.durationText}>{LATEST_VIDEO.duration}</Text>
+          </View>
+        </MediaBox>
+        <View style={styles.videoInfo}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.videoTitle}>{LATEST_VIDEO.title[lang]}</Text>
+            <Text style={styles.rowSub}>Estafet · {LATEST_VIDEO.meta[lang]}</Text>
+          </View>
+          <Pressable
+            onPress={() => Linking.openURL(LATEST_VIDEO.url).catch(() => {})}
+            accessibilityRole="link"
+            accessibilityLabel={t.watch}
+            style={({ pressed }) => [styles.watch, pressed && { backgroundColor: C.accent600 }]}
+          >
+            <Icon name="play" size={22} color={C.bg} />
+          </Pressable>
+        </View>
       </View>
     </ScrollView>
   );
 }
 
-function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
+function Row({ children, onPress, disabled, label, last }: { children: ReactNode; onPress: () => void; disabled?: boolean; label: string; last?: boolean }) {
   return (
-    <View style={styles.stat}>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.row, last && styles.rowLast, pressed && { backgroundColor: C.n200 }]}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+function IconBox({ icon }: { icon: IconName }) {
+  return (
+    <View style={styles.iconBox}>
+      <Icon name={icon} size={20} color={C.text} />
+    </View>
+  );
+}
+
+function Stat({ label, value, unit, ruled }: { label: string; value: string; unit?: string; ruled?: boolean }) {
+  return (
+    <View style={[styles.stat, ruled && styles.statRuled]}>
       <Text style={styles.statValue}>
         {value}
-        {unit ? <Text style={styles.statUnit}> {unit}</Text> : null}
+        {unit ? <Text style={styles.statUnit}>{unit}</Text> : null}
       </Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
@@ -147,37 +184,40 @@ function Stat({ label, value, unit }: { label: string; value: string; unit?: str
 }
 
 const styles = StyleSheet.create({
-  wrap: { padding: 16, gap: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
-  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  logo: { color: C.text, fontSize: 26, fontWeight: '900', letterSpacing: 0.5 },
-  tagline: { color: C.dim, fontSize: 13, marginTop: 2 },
-  langRow: { flexDirection: 'row', backgroundColor: C.panel, borderRadius: 10, padding: 3 },
-  lang: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-  langOn: { backgroundColor: C.lime },
-  langText: { color: C.dim, fontWeight: '800', fontSize: 13 },
-  stats: { flexDirection: 'row', gap: 8 },
-  stat: { flex: 1, backgroundColor: C.panel, borderRadius: 12, padding: 12 },
-  statValue: { color: C.text, fontSize: 22, fontWeight: '900' },
-  statUnit: { color: C.dim, fontSize: 12, fontWeight: '600' },
-  statLabel: { color: C.dim, fontSize: 12, marginTop: 2 },
-  section: { color: C.dim, fontSize: 12, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginTop: 12 },
-  row: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: C.panel, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.line, minHeight: 68,
-  },
-  rowDone: { opacity: 0.75 },
-  practice: { borderStyle: 'dashed' },
-  rowTitle: { color: C.text, fontSize: 17, fontWeight: '800' },
-  rowSub: { color: C.dim, fontSize: 12, marginTop: 2 },
-  rowScore: { color: C.lime, fontSize: 24, fontWeight: '900' },
-  playBtn: { backgroundColor: C.lime, borderRadius: 10, paddingHorizontal: 18, paddingVertical: 10 },
-  playText: { color: C.limeDark, fontWeight: '900', fontSize: 15 },
-  mode: { backgroundColor: C.panel, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.line },
-  modeBtns: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  modeBtn: { flex: 1, alignItems: 'center', minHeight: 44, justifyContent: 'center' },
-  ghostBtn: { borderRadius: 10, borderWidth: 1, borderColor: C.lime, paddingHorizontal: 18, paddingVertical: 10 },
-  ghostText: { color: C.lime, fontWeight: '900', fontSize: 15 },
-  arrow: { color: C.dim, fontSize: 28, fontWeight: '300' },
-  how: { backgroundColor: C.panel, borderRadius: 14, padding: 14, gap: 8 },
-  howLine: { color: C.text, fontSize: 14, lineHeight: 20 },
+  wrap: { paddingTop: 8, paddingHorizontal: 16, paddingBottom: 24, maxWidth: 560, width: '100%', alignSelf: 'center' },
+  top: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, paddingBottom: 12 },
+  logo: { fontFamily: F.heavy, fontSize: 26, lineHeight: 28, letterSpacing: -0.52, color: C.text },
+  tagline: { fontFamily: F.body, fontSize: 13, marginTop: 4, color: C.n700 },
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  gear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  hero: { marginHorizontal: -16, marginBottom: 16 },
+  heroKicker: { position: 'absolute', left: 0, bottom: 0, backgroundColor: C.accent, paddingVertical: 8, paddingHorizontal: 16 },
+  heroKickerText: { fontFamily: F.heavy, fontSize: 12, letterSpacing: 0.96, textTransform: 'uppercase', color: C.bg },
+  stats: { flexDirection: 'row', borderTopWidth: 2, borderBottomWidth: 2, borderColor: C.divider },
+  stat: { flex: 1, paddingVertical: 12, paddingHorizontal: 10 },
+  statRuled: { borderLeftWidth: 2, borderLeftColor: C.divider },
+  statValue: { fontFamily: F.heavy, fontSize: 26, lineHeight: 28, color: C.text },
+  statUnit: { fontFamily: F.semi, fontSize: 12, color: C.n700 },
+  statLabel: { fontFamily: F.body, fontSize: 12, marginTop: 4, color: C.n700 },
+  section: { marginTop: 24, marginBottom: 4 },
+  xoRow: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.divider },
+  modeLine: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  xoBtns: { flexDirection: 'row', gap: 8, marginTop: 12, marginLeft: 60 },
+  num: { width: 48, fontFamily: F.heavy, fontSize: 34, lineHeight: 34, letterSpacing: -1.36, color: C.accent },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, minHeight: 68, borderBottomWidth: 1, borderBottomColor: C.divider },
+  rowLast: { borderBottomWidth: 2, minHeight: 64, paddingVertical: 10 },
+  rowTitle: { fontFamily: F.heavy, fontSize: 18, color: C.text },
+  rowSub: { fontFamily: F.body, fontSize: 13, color: C.n700, marginTop: 1 },
+  dailyTitle: { fontFamily: F.heavy, fontSize: 17, color: C.text },
+  iconBox: { width: 40, height: 40, borderWidth: 2, borderColor: C.text, alignItems: 'center', justifyContent: 'center' },
+  score: { fontFamily: F.heavy, fontSize: 24, color: C.text },
+  playTag: { minWidth: 76, minHeight: 40, paddingHorizontal: 16, justifyContent: 'center', backgroundColor: C.accent },
+  playTagText: { fontFamily: F.semi, fontSize: 14, color: C.bg },
+  video: { gap: 8, marginTop: 24 },
+  videoKicker: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  duration: { position: 'absolute', right: 0, bottom: 0, backgroundColor: C.text, paddingVertical: 3, paddingHorizontal: 7 },
+  durationText: { fontFamily: F.semi, fontSize: 12, color: C.bg },
+  videoInfo: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  videoTitle: { fontFamily: F.heavy, fontSize: 17, lineHeight: 20, color: C.text },
+  watch: { width: 48, height: 48, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' },
 });

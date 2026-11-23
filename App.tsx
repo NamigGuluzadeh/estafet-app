@@ -1,3 +1,5 @@
+import { Archivo_400Regular, Archivo_600SemiBold, Archivo_800ExtraBold } from '@expo-google-fonts/archivo';
+import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
@@ -11,11 +13,13 @@ import { XO } from './src/screens/XO';
 import { HigherLower } from './src/screens/HigherLower';
 import { Target } from './src/screens/Target';
 import { Result } from './src/screens/Result';
+import { Settings } from './src/screens/Settings';
 import { EMPTY, Save, load, persist, recordDaily } from './src/storage';
 import { C } from './src/theme';
 
 type Screen =
   | { name: 'home' }
+  | { name: 'settings' }
   | { name: 'xo'; vsBot: boolean }
   | { name: 'list' }
   | { name: 'target' }
@@ -26,6 +30,8 @@ type Screen =
 export default function App() {
   const [save, setSave] = useState<Save | null>(null);
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
+  // If the font fails to load, carry on with the system font rather than a blank screen.
+  const [fontsLoaded, fontError] = useFonts({ Archivo_400Regular, Archivo_600SemiBold, Archivo_800ExtraBold });
 
   useEffect(() => {
     load().then(setSave);
@@ -39,6 +45,7 @@ export default function App() {
   const s = save ?? EMPTY;
   const t = STRINGS[s.lang];
   const day = todayKey();
+  const home = () => setScreen({ name: 'home' });
 
   function startPractice() {
     setScreen({
@@ -51,7 +58,7 @@ export default function App() {
   }
 
   let body = null;
-  if (!save) {
+  if (!save || (!fontsLoaded && !fontError)) {
     body = <View />;
   } else if (screen.name === 'home') {
     body = (
@@ -60,6 +67,7 @@ export default function App() {
         save={s}
         day={day}
         onLang={(lang) => update({ ...s, lang })}
+        onSettings={() => setScreen({ name: 'settings' })}
         onDaily={(n) =>
           setScreen({ name: 'draft', seed: dailySeed(day, n), title: `${day.slice(8)}.${day.slice(5, 7)} #${n}`, draftNo: n, day })
         }
@@ -70,14 +78,16 @@ export default function App() {
         onHL={() => setScreen({ name: 'hl' })}
       />
     );
+  } else if (screen.name === 'settings') {
+    body = <Settings t={t} lang={s.lang} onLang={(lang) => update({ ...s, lang })} onBack={home} />;
   } else if (screen.name === 'xo') {
-    body = <XO t={t} vsBot={screen.vsBot} onQuit={() => setScreen({ name: 'home' })} />;
+    body = <XO t={t} vsBot={screen.vsBot} onQuit={home} />;
   } else if (screen.name === 'list') {
-    body = <ListGame t={t} lang={s.lang} onQuit={() => setScreen({ name: 'home' })} />;
+    body = <ListGame t={t} lang={s.lang} onQuit={home} />;
   } else if (screen.name === 'target') {
-    body = <Target t={t} onQuit={() => setScreen({ name: 'home' })} />;
+    body = <Target t={t} onQuit={home} />;
   } else if (screen.name === 'hl') {
-    body = <HigherLower t={t} onQuit={() => setScreen({ name: 'home' })} />;
+    body = <HigherLower t={t} onQuit={home} />;
   } else if (screen.name === 'draft') {
     const d = screen;
     body = (
@@ -86,7 +96,7 @@ export default function App() {
         t={t}
         seed={d.seed}
         title={d.title}
-        onQuit={() => setScreen({ name: 'home' })}
+        onQuit={home}
         onDone={(lineup, score) => {
           const isBest = d.draftNo !== null && score.total > s.best;
           if (d.draftNo !== null) update(recordDaily(s, d.day, d.draftNo, score.total));
@@ -97,13 +107,14 @@ export default function App() {
   } else {
     body = (
       <Result
+        key={screen.title + screen.score.total}
         t={t}
         title={screen.title}
         lineup={screen.lineup}
         score={screen.score}
         isBest={screen.isBest}
         practice={screen.draftNo === null}
-        onHome={() => setScreen({ name: 'home' })}
+        onHome={home}
         onAgain={startPractice}
       />
     );
@@ -112,7 +123,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         {body}
       </SafeAreaView>
     </SafeAreaProvider>
